@@ -3,16 +3,39 @@ import { X, ImageIcon, Loader2, Sparkles, Plus, Trash2, CheckCircle2 } from 'luc
 import { Task, TaskStatus } from '../types';
 import { getDaysFromNow, getTomorrowISO } from '../utils/taskUtils';
 
-interface ExtractedTask {
-  title: string;
-  dueDate: string;
-  status: TaskStatus;
+interface ExtractedTaskPlan {
+  taskTitle: string;
+  milestones: string[];
+}
+
+interface OpenAIResponse {
+  output_text?: string;
+  output?: Array<{
+    content?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+}
+
+function extractTextFromResponse(data: OpenAIResponse): string {
+  if (typeof data.output_text === 'string' && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  const chunks = (data.output ?? [])
+    .flatMap((item) => item.content ?? [])
+    .filter((part) => part.type === 'output_text' && typeof part.text === 'string')
+    .map((part) => part.text!.trim())
+    .filter(Boolean);
+
+  return chunks.join('\n').trim();
 }
 
 interface ImageUploadExtractorProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (tasks: Partial<Task>[]) => void;
+  onImport: (task: Partial<Task>) => void;
 }
 
 const STATUS_OPTIONS: TaskStatus[] = ['Pending', 'In Progress', 'Completed', 'Overdue'];
@@ -34,7 +57,11 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [extracted, setExtracted] = useState<ExtractedTask[]>([]);
+  const [suggestedTitle, setSuggestedTitle] = useState('');
+  const [taskTitle, setTaskTitle] = useState('');
+  const [milestones, setMilestones] = useState<string[]>([]);
+  const [dueDate, setDueDate] = useState(getTomorrowISO());
+  const [status, setStatus] = useState<TaskStatus>('Pending');
   const [success, setSuccess] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -46,7 +73,11 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
     }
     setFile(f);
     setError(null);
-    setExtracted([]);
+    setSuggestedTitle('');
+    setTaskTitle('');
+    setMilestones([]);
+    setDueDate(getTomorrowISO());
+    setStatus('Pending');
     setSuccess(false);
     const url = URL.createObjectURL(f);
     setPreview(url);
@@ -69,35 +100,65 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
     setLoading(true);
     setError(null);
     try {
+      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      if (!apiKey) {
+        throw new Error('Missing OpenAI API key. Add VITE_OPENAI_API_KEY to your .env file.');
+      }
+
       const base64 = await toBase64(file);
       const today = new Date();
-      const defaultDue = getDaysFromNow(7);
+      const defaultDue = getDaysFromNow(3);
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [
+          model: 'gpt-4.1-mini',
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'task_plan',
+              strict: true,
+              schema: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  taskTitle: { type: 'string' },
+                  milestones: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                },
+                required: ['taskTitle', 'milestones'],
+              },
+            },
+          },
+          input: [
             {
               role: 'user',
               content: [
                 {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: file.type,
-                    data: base64,
-                  },
+                  type: 'input_text',
+                  text: `Read this image and extract a task plan. Return ONLY valid JSON and no markdown.
+Required JSON shape:
+{
+  "taskTitle": "string",
+  "milestones": ["string", "string"]
+}
+Rules:
+- taskTitle should use the main heading/title from the image if present.
+- milestones should be all checklist/todo/milestone lines found in the image.
+- If no clear heading exists, use "Imported Task".
+- If no milestones exist, return an empty array.
+- Do not include numbering prefixes in milestone text.
+- Today is ${today.toISOString().split('T')[0]}. If dates are present in milestones, keep them in text.`,
                 },
                 {
-                  type: 'text',
-                  text: `Extract all to-do tasks from this image. Return ONLY a valid JSON array with no markdown or explanation. Each item must have: title (string), dueDate (ISO date string, guess a reasonable future date if not visible, default to 7 days from today which is ${defaultDue}), status ('Pending' by default). Today is ${today.toISOString().split('T')[0]}. Example: [{"title": "Buy groceries", "dueDate": "${defaultDue}", "status": "Pending"}]`,
+                  type: 'input_image',
+                  image_url: `data:${file.type};base64,${base64}`,
                 },
               ],
             },
@@ -107,45 +168,68 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error((errData as { error?: { message?: string } }).error?.message ?? `API error ${response.status}`);
+        throw new Error((errData as { error?: { message?: string } }).error?.message ?? `OpenAI API error ${response.status}`);
       }
 
-      const data = await response.json();
-      const raw: string = data.content[0].text;
+      const data = (await response.json()) as OpenAIResponse;
+      const raw = extractTextFromResponse(data);
 
-      // Strip markdown code blocks if present
+      if (!raw.trim()) {
+        throw new Error('The model returned an empty result. Please try again.');
+      }
+
       const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleaned) as ExtractedTask[];
+      const parsed = JSON.parse(cleaned) as ExtractedTaskPlan;
 
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        throw new Error('No tasks found in the image. Try a clearer image of a to-do list.');
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Could not parse extracted task plan.');
       }
 
-      const normalized = parsed.map((t) => ({
-        title: t.title ?? 'Untitled Task',
-        dueDate: t.dueDate ?? getTomorrowISO(),
-        status: (STATUS_OPTIONS.includes(t.status) ? t.status : 'Pending') as TaskStatus,
-      }));
+      const normalizedMilestones = Array.isArray(parsed.milestones)
+        ? parsed.milestones
+            .map((m) => m.trim())
+            .filter(Boolean)
+        : [];
 
-      setExtracted(normalized);
+      const extractedTitle = parsed.taskTitle?.trim() || 'Imported Task';
+      setSuggestedTitle(extractedTitle);
+      setTaskTitle(extractedTitle);
+      setMilestones(normalizedMilestones);
+      setDueDate(defaultDue);
+      setStatus('Pending');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to extract tasks. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to extract milestones. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
-  function updateExtracted(idx: number, changes: Partial<ExtractedTask>) {
-    setExtracted((prev) => prev.map((t, i) => (i === idx ? { ...t, ...changes } : t)));
+  function updateMilestone(idx: number, value: string) {
+    setMilestones((prev) => prev.map((m, i) => (i === idx ? value : m)));
   }
 
-  function removeExtracted(idx: number) {
-    setExtracted((prev) => prev.filter((_, i) => i !== idx));
+  function removeMilestone(idx: number) {
+    setMilestones((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  function handleImportAll() {
-    if (extracted.length === 0) return;
-    onImport(extracted);
+  function addMilestone() {
+    setMilestones((prev) => [...prev, '']);
+  }
+
+  function handleCreateTask() {
+    const finalTitle = taskTitle.trim() || suggestedTitle || 'Imported Task';
+    const finalMilestones = milestones
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .map((title) => ({ title }));
+
+    onImport({
+      title: finalTitle,
+      dueDate,
+      status,
+      milestones: finalMilestones,
+    });
+
     setSuccess(true);
     setTimeout(() => {
       resetState();
@@ -156,7 +240,11 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
   function resetState() {
     setFile(null);
     setPreview(null);
-    setExtracted([]);
+    setSuggestedTitle('');
+    setTaskTitle('');
+    setMilestones([]);
+    setDueDate(getTomorrowISO());
+    setStatus('Pending');
     setError(null);
     setLoading(false);
     setSuccess(false);
@@ -244,7 +332,16 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
             <div className="relative group rounded-2xl overflow-hidden border border-stone-200 shadow-sm">
               <img src={preview} alt="Uploaded" className="w-full max-h-64 object-contain bg-stone-50" />
               <button
-                onClick={() => { setFile(null); setPreview(null); setExtracted([]); setError(null); }}
+                onClick={() => {
+                  setFile(null);
+                  setPreview(null);
+                  setSuggestedTitle('');
+                  setTaskTitle('');
+                  setMilestones([]);
+                  setDueDate(getTomorrowISO());
+                  setStatus('Pending');
+                  setError(null);
+                }}
                 className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm rounded-full p-1.5 shadow-sm border border-stone-200 text-stone-500 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
               >
                 <X size={14} />
@@ -256,7 +353,7 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
           )}
 
           {/* Extract Button */}
-          {file && extracted.length === 0 && !success && (
+          {file && milestones.length === 0 && !success && (
             <button
               onClick={handleExtract}
               disabled={loading}
@@ -270,7 +367,7 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
               ) : (
                 <>
                   <Sparkles size={18} />
-                  Extract Tasks
+                  Extract Milestones
                 </>
               )}
             </button>
@@ -288,78 +385,109 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
               <CheckCircle2 size={20} className="text-emerald-500 flex-shrink-0" />
               <p className="text-sm text-emerald-700 font-medium">
-                Tasks imported successfully!
+                Task created successfully!
               </p>
             </div>
           )}
 
-          {/* Extracted Tasks */}
-          {extracted.length > 0 && !success && (
+          {/* Extracted Task Plan */}
+          {milestones.length > 0 && !success && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-stone-700">
-                  Extracted Tasks
+                  Extracted Milestones
                   <span className="ml-2 bg-indigo-100 text-indigo-600 text-xs px-2 py-0.5 rounded-full">
-                    {extracted.length}
+                    {milestones.length}
                   </span>
                 </h3>
                 <p className="text-xs text-stone-400">Edit before importing</p>
               </div>
 
-              <div className="space-y-3">
-                {extracted.map((t, i) => (
-                  <div key={i} className="bg-stone-50 rounded-xl border border-stone-200 p-3.5 space-y-2.5">
-                    <div className="flex items-start gap-2">
+              <div className="bg-stone-50 rounded-xl border border-stone-200 p-3.5 space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Task Title</label>
+                  <input
+                    type="text"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 text-stone-800 font-medium"
+                    placeholder="Task title"
+                  />
+                  {suggestedTitle && (
+                    <p className="mt-1 text-xs text-stone-400">
+                      Suggested from image heading: {suggestedTitle}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Due Date</label>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 text-stone-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Status</label>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                      className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 text-stone-600 cursor-pointer"
+                    >
+                      {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {milestones.map((milestone, i) => (
+                    <div key={i} className="flex items-start gap-2">
                       <input
                         type="text"
-                        value={t.title}
-                        onChange={(e) => updateExtracted(i, { title: e.target.value })}
-                        className="flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 text-stone-800 font-medium"
-                        placeholder="Task title"
+                        value={milestone}
+                        onChange={(e) => updateMilestone(i, e.target.value)}
+                        className="flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 text-stone-800"
+                        placeholder="Milestone title"
                       />
                       <button
-                        onClick={() => removeExtracted(i)}
+                        onClick={() => removeMilestone(i)}
                         className="p-2 text-stone-300 hover:text-red-400 transition-colors flex-shrink-0"
                       >
                         <Trash2 size={15} />
                       </button>
                     </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="date"
-                        value={t.dueDate}
-                        onChange={(e) => updateExtracted(i, { dueDate: e.target.value })}
-                        className="flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 text-stone-600"
-                      />
-                      <select
-                        value={t.status}
-                        onChange={(e) => updateExtracted(i, { status: e.target.value as TaskStatus })}
-                        className="flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 text-stone-600 cursor-pointer"
-                      >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                <button
+                  onClick={addMilestone}
+                  className="flex items-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
+                >
+                  <Plus size={14} />
+                  Add Milestone
+                </button>
               </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        {extracted.length > 0 && !success && (
+        {milestones.length > 0 && !success && (
           <div className="px-6 py-4 border-t border-stone-100 space-y-2">
             <button
-              onClick={handleImportAll}
+              onClick={handleCreateTask}
               className="w-full flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl py-3.5 transition-all duration-200 shadow-md shadow-indigo-200"
             >
               <Plus size={18} />
-              Add All to Planner ({extracted.length} task{extracted.length !== 1 ? 's' : ''})
+              Create Task with Milestones
             </button>
             <button
-              onClick={() => { setExtracted([]); setError(null); }}
+              onClick={() => { setMilestones([]); setError(null); }}
               className="w-full text-sm text-stone-400 hover:text-stone-600 py-2 transition-colors"
             >
               Re-extract
@@ -367,10 +495,10 @@ export default function ImageUploadExtractor({ isOpen, onClose, onImport }: Imag
           </div>
         )}
 
-        {extracted.length === 0 && file && !loading && !success && (
+        {milestones.length === 0 && file && !loading && !success && (
           <div className="px-6 py-4 border-t border-stone-100">
             <p className="text-xs text-stone-400 text-center">
-              Upload an image of a handwritten or digital to-do list
+              Upload an image of a checklist or milestone list
             </p>
           </div>
         )}

@@ -19,7 +19,7 @@ export default function App() {
     addMilestone,
     toggleMilestone,
     addComment,
-    extractAndAddTasks,
+    extractAndAddTask,
   } = useTasks();
 
   // 'Calendar' = show calendar view; any other value = show task board with that filter
@@ -113,7 +113,7 @@ export default function App() {
       <ImageUploadExtractor
         isOpen={importerOpen}
         onClose={() => setImporterOpen(false)}
-        onImport={extractAndAddTasks}
+        onImport={extractAndAddTask}
       />
     </div>
   );

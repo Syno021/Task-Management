@@ -112,12 +112,29 @@ export function useTasks() {
     setTasks((prev) =>
       prev.map((t) =>
         t.id === taskId
-          ? {
-              ...t,
-              milestones: t.milestones.map((m) =>
+          ? (() => {
+              const milestones = t.milestones.map((m) =>
                 m.id === milestoneId ? { ...m, completed: !m.completed } : m
-              ),
-            }
+              );
+              const completedCount = milestones.filter((m) => m.completed).length;
+              const allCompleted = milestones.length > 0 && completedCount === milestones.length;
+              const hasAnyCompleted = completedCount > 0;
+
+              let status: TaskStatus = t.status;
+              if (allCompleted) {
+                status = 'Completed';
+              } else if (hasAnyCompleted) {
+                status = 'In Progress';
+              } else if (t.status === 'Completed' || t.status === 'In Progress') {
+                status = 'Pending';
+              }
+
+              return {
+                ...t,
+                status,
+                milestones,
+              };
+            })()
           : t
       )
     );
@@ -136,17 +153,26 @@ export function useTasks() {
     );
   }, []);
 
-  const extractAndAddTasks = useCallback((partials: Partial<Task>[]) => {
-    const newTasks: Task[] = partials.map((p) => ({
+  const extractAndAddTask = useCallback((partial: Partial<Task>) => {
+    const milestoneTitles = (partial.milestones ?? [])
+      .map((m) => m.title?.trim())
+      .filter((title): title is string => Boolean(title));
+
+    const newTask: Task = {
       id: generateId(),
-      title: p.title ?? 'Untitled Task',
+      title: partial.title?.trim() || 'Untitled Task',
       createdDate: getTodayISO(),
-      dueDate: p.dueDate ?? getTomorrowISO(),
-      status: (p.status as TaskStatus) ?? 'Pending',
-      milestones: [],
+      dueDate: partial.dueDate ?? getTomorrowISO(),
+      status: (partial.status as TaskStatus) ?? 'Pending',
+      milestones: milestoneTitles.map((title) => ({
+        id: generateId(),
+        title,
+        completed: false,
+      })),
       comments: [],
-    }));
-    setTasks((prev) => [...newTasks, ...prev]);
+    };
+
+    setTasks((prev) => [newTask, ...prev]);
   }, []);
 
   return {
@@ -157,6 +183,6 @@ export function useTasks() {
     addMilestone,
     toggleMilestone,
     addComment,
-    extractAndAddTasks,
+    extractAndAddTask,
   };
 }
