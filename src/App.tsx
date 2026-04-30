@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Menu } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Menu, X } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import Sidebar, { SidebarView } from './components/Sidebar';
 import CalendarView from './components/CalendarView';
 import TaskBoard from './components/TaskBoard';
@@ -9,11 +10,16 @@ import AuthScreen from './components/AuthScreen';
 import { useTasks } from './hooks/useTasks';
 import { Task, TaskStatus } from './types';
 import { countByStatus, formatDate } from './utils/taskUtils';
+import { supabase } from './lib/supabaseClient';
+import { signOut, upsertProfileForUser } from './lib/auth';
 
 type BoardFilter = TaskStatus | 'All';
 
 export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [syncErrorMessage, setSyncErrorMessage] = useState('');
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const {
     tasks,
     addTask,
@@ -36,6 +42,63 @@ export default function App() {
 
   const counts = countByStatus(tasks);
   const selectedTask = selectedTaskId ? (tasks.find((t) => t.id === selectedTaskId) ?? null) : null;
+  const displayName =
+    (typeof authUser?.user_metadata?.full_name === 'string' && authUser.user_metadata.full_name.trim()) ||
+    (typeof authUser?.user_metadata?.name === 'string' && authUser.user_metadata.name.trim()) ||
+    '';
+  const sidebarUser = authUser
+    ? {
+        fullName: displayName || 'Signed in user',
+        email: authUser.email ?? '',
+      }
+    : null;
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!mounted) {
+        return;
+      }
+      if (data.user) {
+        try {
+          await upsertProfileForUser(data.user);
+        } catch (error) {
+          console.error('Failed to sync profile', error);
+          setSyncErrorMessage('We could not sync your profile details. Please try again.');
+        }
+      }
+      setAuthUser(data.user ?? null);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        try {
+          await upsertProfileForUser(session.user);
+        } catch (error) {
+          console.error('Failed to sync profile', error);
+          setSyncErrorMessage('We could not sync your profile details. Please try again.');
+        }
+      }
+      setAuthUser(session?.user ?? null);
+      setIsAuthOpen(false);
+    });
+
+    return () => {
+      mounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!syncErrorMessage) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setSyncErrorMessage('');
+    }, 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [syncErrorMessage]);
 
   // Derive what's showing
   const showCalendar = sidebarView === 'Calendar' && calendarDate === null;
@@ -75,8 +138,31 @@ export default function App() {
     setSelectedTaskId(null);
   }
 
+  async function handleSignOut() {
+    if (isSigningOut) {
+      return;
+    }
+    try {
+      setIsSigningOut(true);
+      await signOut();
+      setAuthUser(null);
+      setIsAuthOpen(false);
+      setMobileSidebarOpen(false);
+    } catch (error) {
+      console.error('Failed to sign out', error);
+      setSyncErrorMessage('Sign out failed. Please try again.');
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
+
   return (
     <div className="flex h-dvh overflow-hidden bg-[#fafaf9]">
+      {syncErrorMessage && (
+        <div className="fixed top-4 right-4 z-[80] max-w-xs rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 shadow-sm">
+          {syncErrorMessage}
+        </div>
+      )}
       <div className="hidden md:block">
         <Sidebar
           view={sidebarView}
@@ -84,6 +170,9 @@ export default function App() {
           counts={counts}
           onOpenImporter={() => setImporterOpen(true)}
           onSignIn={() => setIsAuthOpen(true)}
+          onSignOut={handleSignOut}
+          isSigningOut={isSigningOut}
+          user={sidebarUser}
           activeDateLabel={calendarDate ? formatDate(calendarDate) : undefined}
         />
       </div>
@@ -96,6 +185,14 @@ export default function App() {
             onClick={() => setMobileSidebarOpen(false)}
           />
           <div className="relative z-50 h-full w-[84%] max-w-[300px]">
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(false)}
+              className="absolute top-3 right-3 z-[60] p-2 rounded-lg text-stone-300 bg-stone-800/80 hover:bg-stone-700 transition-colors"
+              aria-label="Close sidebar"
+            >
+              <X size={16} />
+            </button>
             <Sidebar
               view={sidebarView}
               onViewChange={handleViewChange}
@@ -108,6 +205,9 @@ export default function App() {
                 setIsAuthOpen(true);
                 setMobileSidebarOpen(false);
               }}
+              onSignOut={handleSignOut}
+              isSigningOut={isSigningOut}
+              user={sidebarUser}
               activeDateLabel={calendarDate ? formatDate(calendarDate) : undefined}
             />
           </div>

@@ -1,5 +1,12 @@
 import { useState } from 'react';
 import { KeyRound, UserPlus, X } from 'lucide-react';
+import {
+  sendPasswordReset,
+  signInWithEmail,
+  signInWithGoogle,
+  signUpWithEmail,
+  signUpWithGoogle,
+} from '../lib/auth';
 
 interface AuthScreenProps {
   onAuthenticated: () => void;
@@ -13,31 +20,88 @@ export default function AuthScreen({ onAuthenticated, onClose }: AuthScreenProps
   const [name, setName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetSent, setResetSent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  function handleSignInSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSignInSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       return;
     }
-    onAuthenticated();
-    onClose();
+    try {
+      setIsSubmitting(true);
+      setErrorMessage('');
+      await signInWithEmail(email.trim(), password);
+      onAuthenticated();
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to sign in.';
+      setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleSignUpSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSignUpSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !password.trim() || password !== confirmPassword) {
       return;
     }
-    onAuthenticated();
-    onClose();
+    try {
+      setIsSubmitting(true);
+      setErrorMessage('');
+      await signUpWithEmail(email.trim(), password, name.trim());
+      onAuthenticated();
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create account.';
+      setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleForgotPasswordSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleForgotPasswordSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!email.trim()) {
       return;
     }
-    setResetSent(true);
+    try {
+      setIsSubmitting(true);
+      setErrorMessage('');
+      await sendPasswordReset(email.trim());
+      setResetSent(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to send reset link.';
+      setErrorMessage(message);
+      setResetSent(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    try {
+      setIsSubmitting(true);
+      setErrorMessage('');
+      await signInWithGoogle();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Google sign in failed.';
+      setErrorMessage(message);
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleSignUp() {
+    try {
+      setIsSubmitting(true);
+      setErrorMessage('');
+      await signUpWithGoogle();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Google sign up failed.';
+      setErrorMessage(message);
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -58,6 +122,11 @@ export default function AuthScreen({ onAuthenticated, onClose }: AuthScreenProps
             <X size={16} />
           </button>
         </div>
+        {errorMessage && (
+          <p className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {errorMessage}
+          </p>
+        )}
         {mode === 'signIn' && (
           <>
             <p className="text-stone-600 text-sm mb-6">
@@ -97,9 +166,18 @@ export default function AuthScreen({ onAuthenticated, onClose }: AuthScreenProps
 
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className="w-full rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-3 transition-colors"
               >
-                Sign in
+                {isSubmitting ? 'Signing in...' : 'Sign in'}
+              </button>
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-stone-300 hover:bg-stone-50 text-stone-800 font-medium py-3 transition-colors"
+              >
+                Continue with Google
               </button>
             </form>
 
@@ -197,9 +275,18 @@ export default function AuthScreen({ onAuthenticated, onClose }: AuthScreenProps
 
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className="w-full rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-3 transition-colors"
               >
-                Create account
+                {isSubmitting ? 'Creating account...' : 'Create account'}
+              </button>
+              <button
+                type="button"
+                onClick={handleGoogleSignUp}
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-stone-300 hover:bg-stone-50 text-stone-800 font-medium py-3 transition-colors"
+              >
+                Register with Google
               </button>
             </form>
 
@@ -236,9 +323,10 @@ export default function AuthScreen({ onAuthenticated, onClose }: AuthScreenProps
               </div>
               <button
                 type="submit"
+                disabled={isSubmitting}
                 className="w-full rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-3 transition-colors"
               >
-                Send reset link
+                {isSubmitting ? 'Sending...' : 'Send reset link'}
               </button>
             </form>
 

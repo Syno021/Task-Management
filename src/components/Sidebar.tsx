@@ -26,11 +26,27 @@ interface SidebarProps {
   counts: FilterCounts;
   onOpenImporter: () => void;
   onSignIn: () => void;
+  onSignOut: () => void;
+  isSigningOut?: boolean;
+  user?: {
+    fullName: string;
+    email: string;
+  } | null;
   /** If a calendar date is selected, show it as a sub-label under Calendar */
   activeDateLabel?: string;
 }
 
-export default function Sidebar({ view, onViewChange, counts, onOpenImporter, onSignIn, activeDateLabel }: SidebarProps) {
+export default function Sidebar({
+  view,
+  onViewChange,
+  counts,
+  onOpenImporter,
+  onSignIn,
+  onSignOut,
+  isSigningOut = false,
+  user,
+  activeDateLabel,
+}: SidebarProps) {
   return (
     <aside className="w-full md:w-64 flex-shrink-0 h-dvh flex flex-col bg-[#1c1917] md:sticky top-0">
       {/* Logo */}
@@ -115,12 +131,28 @@ export default function Sidebar({ view, onViewChange, counts, onOpenImporter, on
             <span className="block text-xs text-stone-500 group-hover:text-indigo-400 font-normal">AI-powered</span>
           </span>
         </button>
-        <button
-          onClick={onSignIn}
-          className="w-full mt-3 px-3 py-3 rounded-xl text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
-        >
-          Sign in
-        </button>
+        {user ? (
+          <div className="w-full mt-3 px-3 py-2.5 rounded-xl border border-stone-700 bg-stone-800/60">
+            <p className="text-xs uppercase tracking-wide text-stone-500 mb-1">Signed in as</p>
+            <p className="text-sm font-medium text-white truncate">{user.fullName}</p>
+            <p className="text-xs text-stone-400 truncate">{user.email}</p>
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={isSigningOut}
+              className="mt-2 w-full px-2.5 py-2 rounded-lg text-xs font-medium text-stone-200 bg-stone-700 hover:bg-stone-600 transition-colors"
+            >
+              {isSigningOut ? 'Signing out...' : 'Sign out'}
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onSignIn}
+            className="w-full mt-3 px-3 py-3 rounded-xl text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
+          >
+            Sign in
+          </button>
+        )}
       </div>
     </aside>
   );
