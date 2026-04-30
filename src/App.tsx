@@ -4,6 +4,7 @@ import CalendarView from './components/CalendarView';
 import TaskBoard from './components/TaskBoard';
 import TaskModal from './components/TaskModal';
 import ImageUploadExtractor from './components/ImageUploadExtractor';
+import AuthScreen from './components/AuthScreen';
 import { useTasks } from './hooks/useTasks';
 import { Task, TaskStatus } from './types';
 import { countByStatus, formatDate } from './utils/taskUtils';
@@ -11,6 +12,7 @@ import { countByStatus, formatDate } from './utils/taskUtils';
 type BoardFilter = TaskStatus | 'All';
 
 export default function App() {
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const {
     tasks,
     addTask,
@@ -77,6 +79,7 @@ export default function App() {
         onViewChange={handleViewChange}
         counts={counts}
         onOpenImporter={() => setImporterOpen(true)}
+        onSignIn={() => setIsAuthOpen(true)}
         activeDateLabel={calendarDate ? formatDate(calendarDate) : undefined}
       />
 
@@ -115,6 +118,13 @@ export default function App() {
         onClose={() => setImporterOpen(false)}
         onImport={extractAndAddTask}
       />
+
+      {isAuthOpen && (
+        <AuthScreen
+          onAuthenticated={() => setIsAuthOpen(false)}
+          onClose={() => setIsAuthOpen(false)}
+        />
+      )}
     </div>
   );
 }

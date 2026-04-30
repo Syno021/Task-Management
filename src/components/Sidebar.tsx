@@ -25,11 +25,12 @@ interface SidebarProps {
   onViewChange: (v: SidebarView) => void;
   counts: FilterCounts;
   onOpenImporter: () => void;
+  onSignIn: () => void;
   /** If a calendar date is selected, show it as a sub-label under Calendar */
   activeDateLabel?: string;
 }
 
-export default function Sidebar({ view, onViewChange, counts, onOpenImporter, activeDateLabel }: SidebarProps) {
+export default function Sidebar({ view, onViewChange, counts, onOpenImporter, onSignIn, activeDateLabel }: SidebarProps) {
   return (
     <aside className="w-64 flex-shrink-0 h-screen flex flex-col bg-[#1c1917] sticky top-0">
       {/* Logo */}
@@ -113,6 +114,12 @@ export default function Sidebar({ view, onViewChange, counts, onOpenImporter, ac
             Import from Image
             <span className="block text-xs text-stone-500 group-hover:text-indigo-400 font-normal">AI-powered</span>
           </span>
+        </button>
+        <button
+          onClick={onSignIn}
+          className="w-full mt-3 px-3 py-3 rounded-xl text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
+        >
+          Sign in
         </button>
       </div>
     </aside>
