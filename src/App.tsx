@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Menu } from 'lucide-react';
 import Sidebar, { SidebarView } from './components/Sidebar';
 import CalendarView from './components/CalendarView';
 import TaskBoard from './components/TaskBoard';
@@ -31,6 +32,7 @@ export default function App() {
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [importerOpen, setImporterOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const counts = countByStatus(tasks);
   const selectedTask = selectedTaskId ? (tasks.find((t) => t.id === selectedTaskId) ?? null) : null;
@@ -42,6 +44,7 @@ export default function App() {
 
   function handleViewChange(v: SidebarView) {
     setSidebarView(v);
+    setMobileSidebarOpen(false);
     if (v !== 'Calendar') {
       setCalendarDate(null); // Clear date drill-down when switching to a status filter
     } else {
@@ -73,17 +76,62 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        view={sidebarView}
-        onViewChange={handleViewChange}
-        counts={counts}
-        onOpenImporter={() => setImporterOpen(true)}
-        onSignIn={() => setIsAuthOpen(true)}
-        activeDateLabel={calendarDate ? formatDate(calendarDate) : undefined}
-      />
+    <div className="flex h-dvh overflow-hidden bg-[#fafaf9]">
+      <div className="hidden md:block">
+        <Sidebar
+          view={sidebarView}
+          onViewChange={handleViewChange}
+          counts={counts}
+          onOpenImporter={() => setImporterOpen(true)}
+          onSignIn={() => setIsAuthOpen(true)}
+          activeDateLabel={calendarDate ? formatDate(calendarDate) : undefined}
+        />
+      </div>
 
-      <div className="flex-1 overflow-y-auto flex">
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <button
+            aria-label="Close navigation"
+            className="absolute inset-0 bg-black/35"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          <div className="relative z-50 h-full w-[84%] max-w-[300px]">
+            <Sidebar
+              view={sidebarView}
+              onViewChange={handleViewChange}
+              counts={counts}
+              onOpenImporter={() => {
+                setImporterOpen(true);
+                setMobileSidebarOpen(false);
+              }}
+              onSignIn={() => {
+                setIsAuthOpen(true);
+                setMobileSidebarOpen(false);
+              }}
+              activeDateLabel={calendarDate ? formatDate(calendarDate) : undefined}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        <header className="md:hidden px-4 py-3 border-b border-stone-200/70 bg-white/90 backdrop-blur-sm sticky top-0 z-30">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="p-2 rounded-lg text-stone-600 hover:bg-stone-100"
+              aria-label="Open navigation"
+            >
+              <Menu size={18} />
+            </button>
+            <p className="text-sm font-semibold text-stone-700 truncate">
+              {calendarDate ? formatDate(calendarDate) : sidebarView}
+            </p>
+            <span className="w-9" />
+          </div>
+        </header>
+
+        <div className="flex-1 flex min-h-0">
         {showCalendar && (
           <CalendarView
             tasks={tasks}
@@ -101,6 +149,7 @@ export default function App() {
             onBackToCalendar={calendarDate ? handleBackToCalendar : undefined}
           />
         )}
+        </div>
       </div>
 
       <TaskModal

@@ -32,7 +32,7 @@ interface SidebarProps {
 
 export default function Sidebar({ view, onViewChange, counts, onOpenImporter, onSignIn, activeDateLabel }: SidebarProps) {
   return (
-    <aside className="w-64 flex-shrink-0 h-screen flex flex-col bg-[#1c1917] sticky top-0">
+    <aside className="w-full md:w-64 flex-shrink-0 h-dvh flex flex-col bg-[#1c1917] md:sticky top-0">
       {/* Logo */}
       <div className="px-6 pt-7 pb-5">
         <div className="flex items-center gap-2.5">

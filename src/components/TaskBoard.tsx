@@ -84,9 +84,9 @@ export default function TaskBoard({
     : FILTER_DESCRIPTIONS[filter];
 
   return (
-    <main className="flex-1 min-h-screen bg-[#fafaf9] flex flex-col">
+    <main className="flex-1 min-h-full bg-[#fafaf9] flex flex-col">
       {/* Header */}
-      <div className="px-8 pt-7 pb-5 border-b border-stone-200/60 bg-white/50 backdrop-blur-sm sticky top-0 z-30">
+      <div className="px-4 sm:px-6 lg:px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-stone-200/60 bg-white/50 backdrop-blur-sm sticky top-0 z-20">
 
         {/* Back-to-calendar breadcrumb */}
         {isDateMode && onBackToCalendar && (
@@ -100,10 +100,10 @@ export default function TaskBoard({
           </button>
         )}
 
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <h1
-              className="text-2xl font-bold text-stone-800 mb-1 leading-tight"
+            className="text-xl sm:text-2xl font-bold text-stone-800 mb-1 leading-tight"
               style={{ fontFamily: 'Syne, sans-serif' }}
             >
               {headerTitle}
@@ -112,7 +112,7 @@ export default function TaskBoard({
           </div>
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm shadow-md shadow-indigo-200 hover:shadow-indigo-300 transition-all duration-200 active:scale-95 flex-shrink-0 ml-4"
+            className="flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm shadow-md shadow-indigo-200 hover:shadow-indigo-300 transition-all duration-200 active:scale-95 flex-shrink-0 sm:ml-4 w-full sm:w-auto"
           >
             <Plus size={16} />
             New Task
@@ -122,7 +122,7 @@ export default function TaskBoard({
 
       {/* New Task Form */}
       {showForm && (
-        <div className="mx-8 mt-6">
+        <div className="mx-4 sm:mx-6 lg:mx-8 mt-4 sm:mt-6">
           <form
             onSubmit={handleSubmit}
             className="bg-white rounded-2xl border border-indigo-100 shadow-lg shadow-indigo-100/50 p-5"
@@ -149,7 +149,7 @@ export default function TaskBoard({
                 required
                 className="w-full text-sm bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 placeholder-stone-400 text-stone-800"
               />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-stone-500 mb-1">Due Date</label>
                   <input
@@ -185,7 +185,7 @@ export default function TaskBoard({
       )}
 
       {/* Task List */}
-      <div className="flex-1 px-8 py-6">
+      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center mb-4">

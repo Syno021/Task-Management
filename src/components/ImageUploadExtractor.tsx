@@ -267,12 +267,12 @@ Rules:
 
       {/* Panel */}
       <div
-        className={`fixed top-0 left-0 h-full w-full max-w-xl bg-white z-50 shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed top-0 left-0 h-full w-full md:max-w-xl bg-white z-50 shadow-2xl flex flex-col transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-stone-100">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-5 border-b border-stone-100">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center">
               <Sparkles size={18} className="text-indigo-600" />
@@ -293,7 +293,7 @@ Rules:
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
 
           {/* Upload Zone */}
           {!preview ? (
@@ -302,7 +302,7 @@ Rules:
               onDrop={handleDrop}
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
-              className={`relative border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${
+              className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 ${
                 dragging
                   ? 'border-indigo-400 bg-indigo-50'
                   : 'border-stone-200 hover:border-indigo-300 hover:bg-indigo-50/50 bg-stone-50'
@@ -420,7 +420,7 @@ Rules:
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs font-medium text-stone-500 mb-1">Due Date</label>
                     <input
@@ -478,7 +478,7 @@ Rules:
 
         {/* Footer */}
         {milestones.length > 0 && !success && (
-          <div className="px-6 py-4 border-t border-stone-100 space-y-2">
+          <div className="px-4 sm:px-6 py-4 border-t border-stone-100 space-y-2">
             <button
               onClick={handleCreateTask}
               className="w-full flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl py-3.5 transition-all duration-200 shadow-md shadow-indigo-200"
@@ -496,7 +496,7 @@ Rules:
         )}
 
         {milestones.length === 0 && file && !loading && !success && (
-          <div className="px-6 py-4 border-t border-stone-100">
+          <div className="px-4 sm:px-6 py-4 border-t border-stone-100">
             <p className="text-xs text-stone-400 text-center">
               Upload an image of a checklist or milestone list
             </p>

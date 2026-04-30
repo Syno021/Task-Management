@@ -82,25 +82,27 @@ export default function MilestoneList({ milestones, onToggle, onAdd }: Milestone
             placeholder="Milestone title..."
             className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 placeholder-stone-400"
           />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <input
               type="date"
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
-              className="flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 text-stone-600"
+              className="w-full sm:flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 text-stone-600"
             />
-            <button
-              onClick={handleAdd}
-              className="px-3 py-2 bg-indigo-500 text-white text-sm rounded-lg hover:bg-indigo-600 transition-colors font-medium"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => { setAdding(false); setNewTitle(''); setNewDate(''); }}
-              className="px-3 py-2 text-stone-500 text-sm rounded-lg hover:bg-stone-200 transition-colors"
-            >
-              Cancel
-            </button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                onClick={handleAdd}
+                className="flex-1 sm:flex-none px-3 py-2 bg-indigo-500 text-white text-sm rounded-lg hover:bg-indigo-600 transition-colors font-medium"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => { setAdding(false); setNewTitle(''); setNewDate(''); }}
+                className="flex-1 sm:flex-none px-3 py-2 text-stone-500 text-sm rounded-lg hover:bg-stone-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       ) : (

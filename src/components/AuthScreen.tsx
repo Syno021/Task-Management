@@ -41,8 +41,8 @@ export default function AuthScreen({ onAuthenticated, onClose }: AuthScreenProps
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center p-6">
-      <section className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
+    <div className="fixed inset-0 z-50 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+      <section className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 p-5 sm:p-8 max-h-[92dvh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold text-stone-900" style={{ fontFamily: 'Syne, sans-serif' }}>
             {mode === 'signIn' && 'Sign in'}
@@ -103,7 +103,7 @@ export default function AuthScreen({ onAuthenticated, onClose }: AuthScreenProps
               </button>
             </form>
 
-            <div className="mt-5 flex items-center justify-between gap-3">
+            <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setMode('signUp')}

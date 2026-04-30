@@ -96,10 +96,10 @@ export default function CalendarView({ tasks, onDateClick }: CalendarViewProps) 
   return (
     <div className="flex-1 flex flex-col bg-[#fafaf9] overflow-hidden">
       {/* ── Header ── */}
-      <div className="px-8 pt-7 pb-4 bg-white/60 backdrop-blur-sm border-b border-stone-200/60 flex items-center justify-between flex-shrink-0">
+      <div className="px-4 sm:px-6 lg:px-8 pt-5 sm:pt-7 pb-4 bg-white/60 backdrop-blur-sm border-b border-stone-200/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-shrink-0">
         <div>
           <h1
-            className="text-2xl font-bold text-stone-800"
+            className="text-xl sm:text-2xl font-bold text-stone-800"
             style={{ fontFamily: 'Syne, sans-serif' }}
           >
             {formatCalendarHeader(viewYear, viewMonth)}
@@ -136,17 +136,19 @@ export default function CalendarView({ tasks, onDateClick }: CalendarViewProps) 
       </div>
 
       {/* ── Day-of-week labels ── */}
-      <div className="grid grid-cols-7 px-6 pt-4 pb-2 flex-shrink-0">
+      <div className="px-3 sm:px-6 pt-3 sm:pt-4 pb-2 flex-shrink-0 overflow-x-auto">
+        <div className="grid grid-cols-7 min-w-[700px]">
         {DAY_LABELS.map((d) => (
           <div key={d} className="text-center text-xs font-semibold text-stone-400 uppercase tracking-widest">
             {d}
           </div>
         ))}
+        </div>
       </div>
 
       {/* ── Calendar grid ── */}
-      <div className="flex-1 px-6 pb-6 overflow-auto">
-        <div className="grid grid-cols-7 gap-1.5 h-full" style={{ gridAutoRows: '1fr' }}>
+      <div className="flex-1 px-3 sm:px-6 pb-4 sm:pb-6 overflow-auto">
+        <div className="grid grid-cols-7 gap-1.5 h-full min-w-[700px]" style={{ gridAutoRows: '1fr' }}>
           {cells.map((cell) => {
             const dayTasks = tasksByDate[cell.iso] ?? [];
             const hasTasks = dayTasks.length > 0;
@@ -253,15 +255,15 @@ export default function CalendarView({ tasks, onDateClick }: CalendarViewProps) 
       </div>
 
       {/* ── Legend ── */}
-      <div className="px-8 py-3 border-t border-stone-100 bg-white/40 flex items-center gap-5 flex-shrink-0">
-        <span className="text-xs text-stone-400 font-medium">Legend:</span>
+      <div className="px-4 sm:px-8 py-3 border-t border-stone-100 bg-white/40 flex items-center gap-3 sm:gap-5 flex-shrink-0 overflow-x-auto">
+        <span className="text-xs text-stone-400 font-medium whitespace-nowrap">Legend:</span>
         {(['Pending', 'In Progress', 'Completed', 'Overdue'] as TaskStatus[]).map((s) => (
-          <span key={s} className="flex items-center gap-1.5 text-xs text-stone-500">
+          <span key={s} className="flex items-center gap-1.5 text-xs text-stone-500 whitespace-nowrap">
             <span className={`w-2 h-2 rounded-full ${STATUS_DOT[s]}`} />
             {s}
           </span>
         ))}
-        <span className="flex items-center gap-1.5 text-xs text-stone-400 ml-auto">
+        <span className="hidden md:flex items-center gap-1.5 text-xs text-stone-400 ml-auto whitespace-nowrap">
           <CalendarDays size={12} />
           Click any upcoming date to add or view tasks
         </span>
