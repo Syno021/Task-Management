@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, ClipboardList, ArrowLeft, Calendar } from 'lucide-react';
+import { Plus, X, ClipboardList, ArrowLeft, Calendar, Image as ImageIcon } from 'lucide-react';
 import { Task, TaskStatus } from '../types';
 import TaskCard from './TaskCard';
 import { getTomorrowISO, filterTasksByStatus, filterTasksByDate, formatDayHeading, formatDate } from '../utils/taskUtils';
@@ -17,6 +17,7 @@ interface TaskBoardProps {
   filter: FilterType;
   onTaskClick: (task: Task) => void;
   onAddTask: (form: Pick<Task, 'title' | 'dueDate' | 'status'>) => void;
+  onOpenImporter: () => void;
   /** When set, show tasks for this specific date (calendar day-drill-down) */
   dateFilter?: string | null;
   onBackToCalendar?: () => void;
@@ -45,6 +46,7 @@ export default function TaskBoard({
   filter,
   onTaskClick,
   onAddTask,
+  onOpenImporter,
   dateFilter,
   onBackToCalendar,
 }: TaskBoardProps) {
@@ -173,12 +175,22 @@ export default function TaskBoard({
                   </select>
                 </div>
               </div>
-              <button
-                type="submit"
-                className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 rounded-xl transition-colors duration-200 text-sm shadow-sm"
-              >
-                Create Task
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={onOpenImporter}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-stone-100 hover:bg-stone-200 text-stone-700 font-semibold py-3 rounded-xl transition-colors duration-200 text-sm"
+                >
+                  <ImageIcon size={16} />
+                  Upload Image
+                </button>
+                <button
+                  type="submit"
+                  className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 rounded-xl transition-colors duration-200 text-sm shadow-sm"
+                >
+                  Create Task
+                </button>
+              </div>
             </div>
           </form>
         </div>

@@ -145,6 +145,7 @@ export default function App() {
             filter={boardFilter}
             onTaskClick={handleTaskClick}
             onAddTask={addTask}
+            onOpenImporter={() => setImporterOpen(true)}
             dateFilter={calendarDate}
             onBackToCalendar={calendarDate ? handleBackToCalendar : undefined}
           />
