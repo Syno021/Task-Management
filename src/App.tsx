@@ -29,7 +29,10 @@ export default function App() {
     toggleMilestone,
     addComment,
     extractAndAddTask,
-  } = useTasks();
+  } = useTasks({
+    authUser,
+    onSyncError: (message) => setSyncErrorMessage(message),
+  });
 
   // 'Calendar' = show calendar view; any other value = show task board with that filter
   const [sidebarView, setSidebarView] = useState<SidebarView>('Calendar');

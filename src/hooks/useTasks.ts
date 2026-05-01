@@ -1,8 +1,36 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { Task, TaskStatus, Milestone, Comment } from '../types';
 import { generateId, getTodayISO, getTomorrowISO } from '../utils/taskUtils';
+import { fetchTasksForUser, upsertTaskForUser } from '../lib/taskSync';
 
 const STORAGE_KEY = 'planner_tasks';
+const PENDING_SYNC_STORAGE_KEY = 'planner_pending_sync_task_ids';
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+function ensureUuid(value: string): string {
+  return isUuid(value) ? value : crypto.randomUUID();
+}
+
+function normalizeTaskIds(task: Task): Task {
+  return {
+    ...task,
+    id: ensureUuid(task.id),
+    milestones: task.milestones.map((milestone) => ({
+      ...milestone,
+      id: ensureUuid(milestone.id),
+    })),
+    comments: task.comments.map((comment) => ({
+      ...comment,
+      id: ensureUuid(comment.id),
+    })),
+  };
+}
 
 const SAMPLE_TASK: Task = {
   id: generateId(),
@@ -49,15 +77,70 @@ function saveToStorage(tasks: Task[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
 }
 
-export function useTasks() {
+function loadPendingSyncTaskIds(): string[] {
+  try {
+    const raw = localStorage.getItem(PENDING_SYNC_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as string[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePendingSyncTaskIds(ids: string[]) {
+  localStorage.setItem(PENDING_SYNC_STORAGE_KEY, JSON.stringify(ids));
+}
+
+/** Supabase session storage uses navigator locks; parallel requests often abort losers with AbortError — not a failure. */
+function isBenignConcurrencyError(error: unknown): boolean {
+  const msg =
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string'
+      ? (error as { message: string }).message
+      : String(error ?? '');
+  return (
+    /\bAbortError\b/i.test(msg) ||
+    /lock broken by another request/i.test(msg) ||
+    /request was aborted/i.test(msg)
+  );
+}
+
+interface UseTasksOptions {
+  authUser: User | null;
+  onSyncError?: (message: string) => void;
+}
+
+export function useTasks({ authUser, onSyncError }: UseTasksOptions) {
+  const supabaseChainRef = useRef(Promise.resolve());
+
+  /** Run one Supabase-facing operation after the previous completes to avoid auth storage lock steals (Web Locks API). */
+  const enqueueSerialized = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
+    const chained = supabaseChainRef.current.then(operation);
+    supabaseChainRef.current = chained.then(
+      () => undefined,
+      () => undefined,
+    );
+    return chained;
+  }, []);
+
   const [tasks, setTasks] = useState<Task[]>(() => {
-    const loaded = loadFromStorage();
+    const loaded = loadFromStorage().map(normalizeTaskIds);
     return rollOverTasks(loaded);
   });
+  const [pendingSyncTaskIds, setPendingSyncTaskIds] = useState<string[]>(() =>
+    loadPendingSyncTaskIds()
+  );
 
   useEffect(() => {
     saveToStorage(tasks);
   }, [tasks]);
+
+  useEffect(() => {
+    savePendingSyncTaskIds(pendingSyncTaskIds);
+  }, [pendingSyncTaskIds]);
 
   // On mount, roll over overdue tasks
   useEffect(() => {
@@ -66,6 +149,115 @@ export function useTasks() {
       return rolled;
     });
   }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const remoteTasks = await enqueueSerialized(() => fetchTasksForUser(authUser.id));
+        if (cancelled) {
+          return;
+        }
+
+        const localTaskMap = new Map(tasks.map((task) => [task.id, task]));
+        const mergedTasks: Task[] = [...tasks];
+
+        for (const remoteTask of remoteTasks) {
+          if (!localTaskMap.has(remoteTask.id)) {
+            mergedTasks.push(remoteTask);
+          }
+        }
+
+        mergedTasks.sort((a, b) => b.createdDate.localeCompare(a.createdDate));
+        setTasks(mergedTasks);
+
+        const remoteTaskIds = new Set(remoteTasks.map((task) => task.id));
+        const localOnlyTaskIds = tasks
+          .filter((task) => !remoteTaskIds.has(task.id))
+          .map((task) => task.id);
+
+        if (localOnlyTaskIds.length > 0) {
+          setPendingSyncTaskIds((prev) => {
+            const merged = new Set([...prev, ...localOnlyTaskIds]);
+            return Array.from(merged);
+          });
+        }
+      } catch (error) {
+        if (cancelled || isBenignConcurrencyError(error)) {
+          return;
+        }
+        console.error('Failed to fetch tasks from database', error);
+        onSyncError?.('Could not fetch cloud tasks. Showing local data for now.');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser, enqueueSerialized, onSyncError]);
+
+  const syncTaskToCloud = useCallback(
+    async (task: Task) => {
+      if (!authUser) {
+        setPendingSyncTaskIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
+        return;
+      }
+
+      try {
+        await enqueueSerialized(() => upsertTaskForUser(task, authUser.id));
+        setPendingSyncTaskIds((prev) => prev.filter((id) => id !== task.id));
+      } catch (error) {
+        setPendingSyncTaskIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
+        if (isBenignConcurrencyError(error)) {
+          return;
+        }
+        console.error('Failed to sync task to database', error);
+        onSyncError?.('Task was saved locally and will sync when your connection is stable.');
+      }
+    },
+    [authUser, enqueueSerialized, onSyncError]
+  );
+
+  useEffect(() => {
+    if (!authUser || pendingSyncTaskIds.length === 0) {
+      return;
+    }
+
+    const pendingTasks = tasks.filter((task) => pendingSyncTaskIds.includes(task.id));
+    if (pendingTasks.length === 0) {
+      setPendingSyncTaskIds([]);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const successfullySynced: string[] = [];
+      for (const task of pendingTasks) {
+        try {
+          await enqueueSerialized(() => upsertTaskForUser(task, authUser.id));
+          successfullySynced.push(task.id);
+        } catch (error) {
+          if (!isBenignConcurrencyError(error)) {
+            console.error('Failed to sync pending task', error);
+          }
+        }
+      }
+
+      if (cancelled || successfullySynced.length === 0) {
+        return;
+      }
+
+      setPendingSyncTaskIds((prev) => prev.filter((id) => !successfullySynced.includes(id)));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser, enqueueSerialized, pendingSyncTaskIds, tasks]);
 
   const addTask = useCallback((partial: Pick<Task, 'title' | 'dueDate' | 'status'>) => {
     const newTask: Task = {
@@ -78,8 +270,9 @@ export function useTasks() {
       comments: [],
     };
     setTasks((prev) => [newTask, ...prev]);
+    void syncTaskToCloud(newTask);
     return newTask;
-  }, []);
+  }, [syncTaskToCloud]);
 
   const updateTask = useCallback((id: string, changes: Partial<Task>) => {
     setTasks((prev) =>
@@ -173,7 +366,8 @@ export function useTasks() {
     };
 
     setTasks((prev) => [newTask, ...prev]);
-  }, []);
+    void syncTaskToCloud(newTask);
+  }, [syncTaskToCloud]);
 
   return {
     tasks,
